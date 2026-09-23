@@ -1,0 +1,27 @@
+{
+  "chart": {
+    "result": [
+      {
+        "meta": {
+          "currency": "USD",
+          "symbol": "^GSPC",
+          "fullExchangeName": "SNP",
+          "instrumentType": "INDEX",
+          "regularMarketTime": 1700000000,
+          "regularMarketPrice": 5000.25,
+          "chartPreviousClose": 4975.0,
+          "shortName": "S&P 500"
+        },
+        "timestamp": [1699999700, 1700000000],
+        "indicators": {
+          "quote": [
+            {
+              "close": [4999.0, 5000.25]
+            }
+          ]
+        }
+      }
+    ],
+    "error": null
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "chart": {
+    "result": [
+      {
+        "meta": {
+          "currency": "USD",
+          "symbol": "ES=F",
+          "previousClose": 5100.0
+        },
+        "timestamp": [1700000000],
+        "indicators": {
+          "quote": [
+            {
+              "close": [null, 5112.5]
+            }
+          ]
+        }
+      }
+    ],
+    "error": null
+  }
+}
