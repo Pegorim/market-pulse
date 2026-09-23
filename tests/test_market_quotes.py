@@ -65,5 +65,65 @@ class FetchTests(unittest.TestCase):
                 market_quotes.fetch_quote("AAPL")
 
 
+class RegressionTests(unittest.TestCase):
+    def payload(self, closes, times, **meta):
+        return {"chart": {"result": [{"meta": meta, "timestamp": times,
+            "indicators": {"quote": [{"close": closes}]}}]}}
+
+    def test_null_tail_preserves_price_timestamp_pair(self):
+        q = market_quotes.normalize_chart(self.payload([10, 11, None], [1000, 2000, 3000]), "A")
+        self.assertEqual((q['price'], q['timestamp']), (11, 2000))
+
+    def test_misaligned_arrays_do_not_invent_a_timestamp(self):
+        with self.assertRaises(market_quotes.QuoteError):
+            market_quotes.normalize_chart(self.payload([None, 11], [1000]), "A")
+
+    def test_nonfinite_and_boolean_prices_are_not_quotes(self):
+        for value in [float('nan'), float('inf'), True]:
+            with self.subTest(value=value), self.assertRaises(market_quotes.QuoteError):
+                market_quotes.normalize_chart(self.payload([value], [1000], regularMarketPrice=value), 'A')
+
+    def test_zero_price_and_missing_timestamp_are_not_fabricated(self):
+        q = market_quotes.normalize_chart(self.payload([11], [1000], regularMarketPrice=0), 'A')
+        self.assertEqual((q['price'], q['timestamp']), (0, 0))
+
+    def test_old_success_and_session_are_independent(self):
+        with mock.patch.object(market_quotes.time, 'time', return_value=5000):
+            q = market_quotes.normalize_chart(self.payload([], [], regularMarketPrice=11,
+                regularMarketTime=1000, marketState='CLOSED', priceHint=3), 'A')
+        self.assertEqual((q['timestamp'], q['fetchedAt'], q['marketState'], q['priceHint']), (1000, 5000, 'CLOSED', 3))
+        q = market_quotes.normalize_chart(self.payload([], [], regularMarketPrice=11, regularMarketTime=1000), 'A')
+        self.assertEqual(q['marketState'], 'UNKNOWN')
+
+    def test_stream_yields_success_before_slow_batch_finishes(self):
+        import threading
+        release = threading.Event()
+        events = []
+        def fetch(symbol):
+            if symbol == 'SLOW':
+                if not release.wait(2):
+                    raise AssertionError('A completed quote was not streamed')
+            if symbol.startswith('BAD'):
+                raise market_quotes.QuoteError('Network unavailable')
+            return {'symbol': symbol, 'price': 1}
+        def receive(event):
+            events.append(event)
+            if event['quotes'] and event['quotes'][0]['symbol'] == 'FIRST':
+                release.set()
+        symbols = ['FIRST', 'SLOW'] + ['BAD' + str(i) for i in range(4)] + ['S' + str(i) for i in range(15)]
+        with mock.patch.object(market_quotes, 'fetch_quote', side_effect=fetch):
+            result = market_quotes.fetch_quotes(symbols + ['FIRST'], receive)
+        self.assertEqual(len(events), 21)
+        self.assertEqual(len(result['quotes']), 17)
+        self.assertEqual(len(result['errors']), 4)
+        self.assertTrue(release.is_set())
+
+    def test_invalid_symbol_never_reaches_network(self):
+        with mock.patch.object(market_quotes.urllib.request, 'urlopen') as net:
+            with self.assertRaises(market_quotes.QuoteError):
+                market_quotes.fetch_quote('A;echo bad')
+            net.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

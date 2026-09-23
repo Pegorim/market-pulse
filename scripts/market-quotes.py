@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import json
+import math
+import re
 import sys
 import time
 import urllib.error
@@ -24,13 +26,14 @@ class QuoteError(RuntimeError):
     """A user-facing quote retrieval error."""
 
 
+def finite(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
 def _last_number(values: Any) -> float | None:
     if not isinstance(values, list):
         return None
-    for value in reversed(values):
-        if isinstance(value, (int, float)):
-            return float(value)
-    return None
+    return next((float(v) for v in reversed(values) if finite(v)), None)
 
 
 def normalize_chart(payload: dict[str, Any], requested_symbol: str) -> dict[str, Any]:
@@ -48,28 +51,36 @@ def normalize_chart(payload: dict[str, Any], requested_symbol: str) -> dict[str,
     result = results[0]
     meta = result.get("meta") if isinstance(result.get("meta"), dict) else {}
     price = meta.get("regularMarketPrice")
-    if not isinstance(price, (int, float)):
-        indicators = result.get("indicators") if isinstance(result.get("indicators"), dict) else {}
-        quote_sets = indicators.get("quote") if isinstance(indicators.get("quote"), list) else []
-        closes = quote_sets[0].get("close") if quote_sets and isinstance(quote_sets[0], dict) else []
-        price = _last_number(closes)
-    if not isinstance(price, (int, float)):
-        raise QuoteError("Price unavailable")
-
+    timestamp = meta.get("regularMarketTime")
+    if not finite(price):
+        indicators = result.get("indicators") or {}
+        quote_sets = indicators.get("quote") or []
+        closes = quote_sets[0].get("close", []) if quote_sets and isinstance(quote_sets[0], dict) else []
+        timestamps = result.get("timestamp") or []
+        pairs = [(p, t) for p, t in zip(closes or [], timestamps)
+                 if finite(p) and finite(t) and t > 0]
+        if not pairs:
+            raise QuoteError("Price unavailable")
+        price, timestamp = pairs[-1]
+    # Never attach a candle's timestamp to an unrelated metadata price.
+    timestamp = int(timestamp) if finite(timestamp) and timestamp > 0 else 0
     previous = meta.get("chartPreviousClose")
-    if not isinstance(previous, (int, float)) or previous == 0:
+    if not finite(previous) or previous == 0:
         previous = meta.get("previousClose")
-    if not isinstance(previous, (int, float)) or previous == 0:
+    if not finite(previous) or previous == 0:
         previous = None
-
     numeric_price = float(price)
     change = numeric_price - float(previous) if previous is not None else None
     change_percent = (change / float(previous) * 100.0) if previous is not None else None
-
-    timestamp = meta.get("regularMarketTime")
-    if not isinstance(timestamp, (int, float)):
-        timestamps = result.get("timestamp")
-        timestamp = _last_number(timestamps)
+    change = change if finite(change) else None
+    change_percent = change_percent if finite(change_percent) else None
+    now = int(time.time())
+    # Only explicit provider state, never infer a session from stale schedules/age.
+    session = str(meta.get("marketState") or "UNKNOWN").upper()
+    if session not in ("REGULAR", "PRE", "POST", "CLOSED", "PREPRE", "POSTPOST"):
+        session = "UNKNOWN"
+    precision = meta.get("priceHint")
+    precision = int(precision) if finite(precision) and 0 <= precision <= 8 else 2
 
     return {
         "symbol": requested_symbol,
@@ -82,11 +93,20 @@ def normalize_chart(payload: dict[str, Any], requested_symbol: str) -> dict[str,
         "previousClose": float(previous) if previous is not None else None,
         "change": change,
         "changePercent": change_percent,
-        "timestamp": int(timestamp) if isinstance(timestamp, (int, float)) else 0,
+        "timestamp": timestamp,
+        "quoteTimestamp": timestamp,
+        "fetchedAt": now,
+        "lastSuccessAt": now,
+        "marketState": session,
+        "exchangeTimezone": str(meta.get("exchangeTimezoneName") or ""),
+        "priceHint": precision,
+        "dataDelayMinutes": meta.get("exchangeDataDelayedBy") if finite(meta.get("exchangeDataDelayedBy")) else None,
     }
 
 
 def fetch_quote(symbol: str) -> dict[str, Any]:
+    if not re.fullmatch(r"[A-Z0-9.^=_-]{1,32}", symbol):
+        raise QuoteError("Invalid symbol format")
     encoded = urllib.parse.quote(symbol, safe="")
     query = urllib.parse.urlencode({"interval": "5m", "range": "1d"})
     request = urllib.request.Request(
@@ -114,7 +134,7 @@ def fetch_quote(symbol: str) -> dict[str, Any]:
     return normalize_chart(payload, symbol)
 
 
-def fetch_quotes(symbols: list[str]) -> dict[str, Any]:
+def fetch_quotes(symbols: list[str], on_result=None) -> dict[str, Any]:
     unique_symbols = list(dict.fromkeys(symbol.strip() for symbol in symbols if symbol.strip()))
     quotes: list[dict[str, Any]] = []
     errors: list[dict[str, str]] = []
@@ -125,11 +145,19 @@ def fetch_quotes(symbols: list[str]) -> dict[str, Any]:
         for future in concurrent.futures.as_completed(futures):
             symbol = futures[future]
             try:
-                quotes.append(future.result())
+                quote = future.result()
+                quotes.append(quote)
+                event = {"quotes": [quote], "errors": [], "fetchedAt": int(time.time())}
             except QuoteError as error:
-                errors.append({"symbol": symbol, "message": str(error)})
+                failure = {"symbol": symbol, "message": str(error)}
+                errors.append(failure)
+                event = {"quotes": [], "errors": [failure], "fetchedAt": int(time.time())}
             except Exception:
-                errors.append({"symbol": symbol, "message": "Unexpected quote error"})
+                failure = {"symbol": symbol, "message": "Unexpected quote error"}
+                errors.append(failure)
+                event = {"quotes": [], "errors": [failure], "fetchedAt": int(time.time())}
+            if on_result:
+                on_result(event)
 
     order = {symbol: index for index, symbol in enumerate(unique_symbols)}
     quotes.sort(key=lambda quote: order.get(str(quote.get("symbol")), len(order)))
@@ -139,15 +167,18 @@ def fetch_quotes(symbols: list[str]) -> dict[str, Any]:
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--stream", action="store_true", help="Emit one JSON line per completed symbol")
     parser.add_argument("--symbols", nargs="+", required=True, help="Yahoo Finance symbols")
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv if argv is not None else sys.argv[1:])
-    result = fetch_quotes(args.symbols)
-    json.dump(result, sys.stdout, separators=(",", ":"), allow_nan=False)
-    sys.stdout.write("\n")
+    def emit(event):
+        print(json.dumps(event, separators=(",", ":"), allow_nan=False), flush=True)
+    result = fetch_quotes(args.symbols, on_result=emit if args.stream else None)
+    if not args.stream:
+        emit(result)
     return 0 if result["quotes"] else 1
 
 

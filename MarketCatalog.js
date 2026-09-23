@@ -169,3 +169,35 @@ function symbolsForMarket(marketId) {
   for (var i = 0; i < market.instruments.length; i++) result.push(market.instruments[i].symbol)
   return result
 }
+
+function allInstruments(customSymbols) {
+  var result = [], seen = {}
+  // Commodity units override generic futures metadata, while first position stays stable.
+  markets.forEach(function(market) {
+    market.instruments.forEach(function(item) {
+      var entry = Object.assign({}, item, {marketId: market.id})
+      if (seen[item.symbol] !== undefined) {
+        if (item.unit) result[seen[item.symbol]] = entry
+      } else { seen[item.symbol] = result.length; result.push(entry) }
+    })
+  })
+  ;(customSymbols || []).forEach(function(symbol) {
+    if (seen[symbol] === undefined) {
+      seen[symbol] = result.length
+      result.push({symbol: symbol, label: symbol, shortLabel: symbol, kind: "Custom", marketId: "custom"})
+    }
+  })
+  return result
+}
+function findInstrument(symbol, customSymbols) {
+  var all = allInstruments(customSymbols)
+  return all.filter(function(item) { return item.symbol === symbol })[0]
+    || {symbol: symbol, label: symbol, shortLabel: symbol, kind: "Custom", marketId: "custom"}
+}
+function searchable(value) {
+  return String(value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+}
+function matches(item, query) {
+  var aliases = {"KC=F": "cafe café", "GC=F": "ouro", "SI=F": "prata", "CL=F": "petroleo petróleo", "ZC=F": "milho", "ZS=F": "soja", "ZW=F": "trigo", "SB=F": "acucar açúcar", "BHP": "minerio minério ferro proxy"}
+  return searchable(item.symbol + " " + item.label + " " + (aliases[item.symbol] || "")).indexOf(searchable(query)) >= 0
+}

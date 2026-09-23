@@ -1,190 +1,166 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "QuoteState.js" as State
 
 Item {
-  id: root
+    id: root
 
-  property string selectedSymbol: "^GSPC"
-  property int refreshIntervalSec: 60
-  property var quotes: ({})
-  property string lastError: ""
-  property int lastFetchedAt: 0
-  property string _stdout: ""
-  property string _stderr: ""
-  property var _activeSymbols: []
-  property var _pendingSymbols: []
-  property bool _timedOut: false
-  property bool _stopping: false
-  readonly property bool refreshing: quoteProcess.running || _stopping
-  readonly property string helperPath: Quickshell.env("HOME")
-    + "/.config/omarchy/plugins/mateus.market-pulse/scripts/market-quotes.py"
+    property string selectedSymbol: "^GSPC"
+    property int refreshIntervalSec: 60
+    property bool autoRefresh: true
+    property var quotes: ({
+    })
+    property var _activeSymbols: []
+    property var _pendingSymbols: []
+    property var _received: []
+    property var _retryAfter: ({
+    })
+    property bool _stopping: false
+    property int now: Math.floor(Date.now() / 1000)
+    readonly property bool refreshing: quoteProcess.running || _stopping || queueTimer.running
+    property string helperPath: Qt.resolvedUrl("scripts/market-quotes.py").toString().replace(/^file:\/\//, "")
+    readonly property int failureCount: Object.keys(quotes).filter(function(s) {
+        return !!quotes[s].error;
+    }).length
 
-  function quoteFor(symbol) {
-    return quotes[String(symbol || "")] || null
-  }
+    signal resultReceived(string symbol, bool success)
 
-  function normalizedSymbols(symbols) {
-    var seen = ({})
-    var result = []
-    for (var i = 0; i < symbols.length; i++) {
-      var symbol = String(symbols[i] || "").trim()
-      if (symbol === "" || seen[symbol]) continue
-      seen[symbol] = true
-      result.push(symbol)
-    }
-    return result
-  }
-
-  function mergePending(symbols) {
-    _pendingSymbols = normalizedSymbols(_pendingSymbols.concat(symbols))
-  }
-
-  function refreshSelected() {
-    refreshSymbols([selectedSymbol])
-  }
-
-  function refreshSymbols(symbols) {
-    var requested = normalizedSymbols(symbols || [])
-    if (requested.length === 0) return
-    if (quoteProcess.running || _stopping) {
-      mergePending(requested)
-      return
+    function quoteFor(symbol) {
+        return quotes[String(symbol || "")] || null;
     }
 
-    _activeSymbols = requested
-    _stdout = ""
-    _stderr = ""
-    _timedOut = false
-    _stopping = false
-    var command = ["python3", helperPath, "--symbols"]
-    for (var i = 0; i < requested.length; i++) command.push(requested[i])
-    quoteProcess.command = command
-    quoteProcess.running = true
-    watchdog.restart()
-  }
-
-  function cloneQuote(quote) {
-    var result = ({})
-    if (!quote) return result
-    for (var key in quote) result[key] = quote[key]
-    return result
-  }
-
-  function markFailed(symbols, message) {
-    var next = ({})
-    for (var existing in quotes) next[existing] = quotes[existing]
-    for (var i = 0; i < symbols.length; i++) {
-      var symbol = symbols[i]
-      if (!next[symbol]) continue
-      var stale = cloneQuote(next[symbol])
-      stale.stale = true
-      stale.error = message
-      next[symbol] = stale
-    }
-    quotes = next
-    lastError = message
-  }
-
-  function applySnapshot(raw) {
-    var snapshot
-    try {
-      snapshot = JSON.parse(String(raw || "{}"))
-    } catch (error) {
-      markFailed(_activeSymbols, "Could not read market data")
-      return
+    function refreshSelected() {
+        refreshSymbols([selectedSymbol], true);
     }
 
-    var next = ({})
-    for (var existing in quotes) next[existing] = quotes[existing]
+    function refreshSymbols(symbols, priority) {
+        var requested = State.unique(symbols).filter(function(s) {
+            return root._activeSymbols.indexOf(s) < 0 && Number(root._retryAfter[s] || 0) <= Date.now() / 1000;
+        });
+        _pendingSymbols = State.unique(priority ? requested.concat(_pendingSymbols) : _pendingSymbols.concat(requested)).slice(0, 100);
+        if (!quoteProcess.running && !_stopping && _pendingSymbols.length)
+            queueTimer.restart();
 
-    var received = Array.isArray(snapshot.quotes) ? snapshot.quotes : []
-    for (var i = 0; i < received.length; i++) {
-      var quote = received[i]
-      if (!quote || !quote.symbol) continue
-      quote.stale = false
-      quote.error = ""
-      next[String(quote.symbol)] = quote
     }
 
-    var errors = Array.isArray(snapshot.errors) ? snapshot.errors : []
-    var messages = []
-    for (var j = 0; j < errors.length; j++) {
-      var failure = errors[j] || ({})
-      var symbol = String(failure.symbol || "")
-      var message = String(failure.message || "Quote unavailable")
-      if (symbol !== "" && next[symbol]) {
-        var stale = cloneQuote(next[symbol])
-        stale.stale = true
-        stale.error = message
-        next[symbol] = stale
-      }
-      messages.push(symbol === "" ? message : symbol + ": " + message)
+    function startNext() {
+        if (quoteProcess.running || _stopping || !_pendingSymbols.length)
+            return ;
+ // Four requests per process: the next priority selection waits at most one small batch.
+        _activeSymbols = _pendingSymbols.slice(0, 4);
+        _pendingSymbols = _pendingSymbols.slice(4);
+        _received = [];
+        quoteProcess.command = ["python3", helperPath, "--stream", "--symbols"].concat(_activeSymbols);
+        quoteProcess.running = true;
+        watchdog.restart();
     }
 
-    quotes = next
-    lastFetchedAt = Number(snapshot.fetchedAt || 0)
-    lastError = messages.join(" · ")
-  }
+    function applySnapshot(raw) {
+        var snapshot;
+        try {
+            snapshot = JSON.parse(raw);
+        } catch (e) {
+            return ;
+        }
+        quotes = State.merge(quotes, snapshot);
+        var retry = State.copy(_retryAfter);
+        (snapshot.quotes || []).forEach(function(q) {
+            root._received = State.unique(root._received.concat([q.symbol]));
+            delete retry[q.symbol];
+            root.resultReceived(q.symbol, true);
+        });
+        (snapshot.errors || []).forEach(function(e) {
+            root._received = State.unique(root._received.concat([e.symbol]));
+            if (/Rate limited|429/.test(e.message))
+                retry[e.symbol] = Date.now() / 1000 + 300;
 
-  function startPending() {
-    if (_pendingSymbols.length === 0) return
-    var pending = _pendingSymbols
-    _pendingSymbols = []
-    Qt.callLater(function() { root.refreshSymbols(pending) })
-  }
-
-  onSelectedSymbolChanged: if (selectedSymbol !== "") refreshSelected()
-  Component.onCompleted: refreshSelected()
-
-  Timer {
-    interval: Math.max(30, Math.min(900, root.refreshIntervalSec)) * 1000
-    repeat: true
-    running: true
-    onTriggered: root.refreshSelected()
-  }
-
-  Timer {
-    id: watchdog
-    interval: 12000
-    repeat: false
-    onTriggered: {
-      if (!quoteProcess.running) return
-      root._timedOut = true
-      root._stopping = true
-      root.markFailed(root._activeSymbols, "Market data request timed out")
-      quoteProcess.running = false
-    }
-  }
-
-  Process {
-    id: quoteProcess
-    running: false
-    command: []
-
-    stdout: StdioCollector {
-      id: stdoutCollector
-      waitForEnd: true
-      onStreamFinished: root._stdout = text
+            root.resultReceived(e.symbol, false);
+        });
+        _retryAfter = retry;
     }
 
-    stderr: StdioCollector {
-      id: stderrCollector
-      waitForEnd: true
-      onStreamFinished: root._stderr = text
+    function failUnfinished(message) {
+        var errors = _activeSymbols.filter(function(s) {
+            return root._received.indexOf(s) < 0;
+        }).map(function(s) {
+            return {
+                "symbol": s,
+                "message": message
+            };
+        });
+        applySnapshot(JSON.stringify({
+            "quotes": [],
+            "errors": errors,
+            "fetchedAt": Math.floor(Date.now() / 1000)
+        }));
     }
 
-    onExited: function(exitCode) {
-      watchdog.stop()
-      var output = String(root._stdout || stdoutCollector.text || "")
-      var errorText = String(root._stderr || stderrCollector.text || "").trim()
-      if (!root._timedOut) {
-        if (output !== "") root.applySnapshot(output)
-        else root.markFailed(root._activeSymbols, errorText || "Market data request failed")
-      }
-      root._timedOut = false
-      root._stopping = false
-      root.startPending()
+    onSelectedSymbolChanged: {
+        if (autoRefresh && selectedSymbol) {
+            refreshSelected();
+        }
     }
-  }
+    Component.onCompleted: {
+        if (autoRefresh) {
+            refreshSelected();
+        }
+    }
+
+    Timer {
+        interval: 30000
+        repeat: true
+        running: true
+        onTriggered: root.now = Math.floor(Date.now() / 1000)
+    }
+
+    Timer {
+        interval: Math.max(30, Math.min(900, root.refreshIntervalSec)) * 1000
+        repeat: true
+        running: root.autoRefresh
+        onTriggered: root.refreshSelected()
+    }
+
+    Timer {
+        id: queueTimer
+
+        interval: 1
+        onTriggered: root.startNext()
+    }
+
+    Timer {
+        id: watchdog
+
+        interval: 12000
+        onTriggered: {
+            root._stopping = true;
+            root.failUnfinished("Consulta excedeu o prazo; tente novamente");
+            quoteProcess.running = false;
+        }
+    }
+
+    Process {
+        id: quoteProcess
+
+        onExited: function(exitCode) {
+            watchdog.stop();
+            root.failUnfinished("Não foi possível obter a cotação");
+            root._activeSymbols = [];
+            root._stopping = false;
+            if (root._pendingSymbols.length)
+                queueTimer.restart();
+
+        }
+
+        stdout: SplitParser {
+            onRead: (data) => {
+                return root.applySnapshot(data);
+            }
+        }
+
+        stderr: StdioCollector {
+        }
+
+    }
+
 }
