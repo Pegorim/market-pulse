@@ -134,7 +134,7 @@ Item {
         interval: 12000
         onTriggered: {
             root._stopping = true;
-            root.failUnfinished("Consulta excedeu o prazo; tente novamente");
+            root.failUnfinished("Request timed out; please try again");
             quoteProcess.running = false;
         }
     }
@@ -144,7 +144,7 @@ Item {
 
         onExited: function(exitCode) {
             watchdog.stop();
-            root.failUnfinished("Não foi possível obter a cotação");
+            root.failUnfinished("Could not fetch quote");
             root._activeSymbols = [];
             root._stopping = false;
             if (root._pendingSymbols.length)

@@ -1,10 +1,10 @@
 # Market Pulse for Omarchy
 
-A native, compact monitor for indexes, stocks, futures and commodities. Version 1.2.0 puts quotes first and keeps the inspected instrument independent from the bar.
+A native, compact monitor for indexes, stocks, futures and commodities. Version 1.2.1 puts quotes first and keeps the inspected instrument independent from the bar.
 
 ## Install, update and remove
 
-Requires **Omarchy Quattro** with its Quickshell/Qt Quick shell, **Python 3.10+**, and internet access to `query2.finance.yahoo.com`. Git is used by the Omarchy plugin commands. No API key, paid subscription, pip package, Node runtime or privileged command is required to run the plugin. The interface currently uses Portuguese labels and English instrument names.
+Requires **Omarchy Quattro** with its Quickshell/Qt Quick shell, **Python 3.10+**, and internet access to `query2.finance.yahoo.com`. Git is used by the Omarchy plugin commands. No API key, paid subscription, pip package, Node runtime or privileged command is required to run the plugin. English is the official language of the interface and documentation. Instrument proper names and user-defined labels are preserved; Portuguese search aliases remain available.
 
 ```bash
 omarchy plugin add https://github.com/Pegorim/market-pulse.git --enable
@@ -35,9 +35,9 @@ Native QML panel captured in an isolated test window. **All displayed prices are
 
 - Click the bar widget to open. Its existing instrument, label and refresh interval are preserved.
 - Search any name or ticker directly. Search spans all regions, including Portuguese aliases such as **café**, **ouro** and **petróleo**.
-- Click a row or press Enter to inspect it. Choose **Mostrar na barra** to pin it explicitly.
+- Click a row or press Enter to inspect it. Choose **Pin to bar** to pin it explicitly.
 - Use ☆ / ★ to add or remove favorites. Favorites retain insertion order across sessions.
-- **Todos**, **Favoritos** and the market filter control the list when search is empty.
+- **All**, **Favorites** and the market filter control the list when search is empty.
 - Open ⚙ for the bar label, 30–900 second refresh interval, and custom symbols. A custom symbol is only saved after a successful provider quote. A failed request does not change the bar.
 - Details ⓘ show the price timestamp, last request timestamp, provider session when available, exchange timezone and any request failure. Times are displayed in the local system timezone.
 
@@ -51,8 +51,8 @@ Yahoo Finance public chart endpoint, Python standard library only; no keys or ex
 
 - Positive and negative changes use plugin-local green/red palettes, independent of the theme's `urgent` color. Signs supplement color. Prices and names stay neutral.
 - Price precision uses provider `priceHint` (two decimals if absent), with locale-consistent percentages. Units distinguish currency, points, futures contract units and the explicitly labeled BHP iron-ore **equity proxy**.
-- An old price stays old even after a successful request. “Cotação antiga” means older than 15 minutes; it is an age indicator, **not** proof of a closed market or a provider's declared delay. Unknown timestamps remain unknown.
-- Session state is shown only from explicit provider metadata. Missing state is “Sessão não informada”, never inferred from weekday or quote age.
+- An old price stays old even after a successful request. “Stale quote” means older than 15 minutes; it is an age indicator, **not** proof of a closed market or a provider's declared delay. Unknown timestamps remain unknown.
+- Session state is shown only from explicit provider metadata. Missing state is “Session not provided”, never inferred from weekday or quote age.
 - Each successful result is streamed immediately. Four symbols per batch, seven-second network timeouts, twelve-second process watchdog. The watchdog marks only unfinished symbols as failed and preserves previous prices.
 - The bar/inspected symbol is prioritized for the next available batch. Active/queued symbols are deduplicated, queue capped at 100, and 429 triggers five minutes of per-symbol backoff.
 - The bar refreshes every 60 seconds by default; an open list every five minutes. Data is best-effort and may be delayed.

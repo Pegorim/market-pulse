@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.1 (2026-09-24)
+
+- Make English the official UI and documentation language, including tooltips, accessibility labels, validation errors and quote/session status.
+- Preserve user-defined labels, instrument proper names, locale-aware numeric formatting and Portuguese search aliases.
+- Refresh the native preview and language-dependent regression expectations.
+
 ## 1.2.0 (2026-09-23)
 
 - Rebuild the native panel around quotes, global search, optional market filters and persistent favorites.

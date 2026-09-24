@@ -57,11 +57,11 @@ Panel {
             return true;
 
         if (!root.bar || !root.bar.shell || typeof root.bar.shell.updateEntryInline !== "function") {
-            notice = "Não foi possível salvar as preferências. Tente novamente.";
+            notice = "Could not save preferences. Please try again.";
             return false;
         }
         if (!root.bar.shell.updateEntryInline(root.moduleName, entry)) {
-            notice = "As preferências não foram alteradas.";
+            notice = "Preferences were not changed.";
             return false;
         }
         root.settings = entry;
@@ -105,11 +105,11 @@ Panel {
     function validateCustom() {
         var symbol = customSymbolField.text.trim().toUpperCase();
         if (!/^[A-Z0-9.^=_-]{1,32}$/.test(symbol)) {
-            notice = "Use um ticker válido, como VALE, BTC-USD ou KC=F.";
+            notice = "Enter a valid ticker, such as VALE, BTC-USD or KC=F.";
             return ;
         }
         validatingSymbol = symbol;
-        notice = "Consultando " + symbol + "…";
+        notice = "Fetching " + symbol + "…";
         quoteService.refreshSymbols([symbol], true);
         validationTimer.restart();
     }
@@ -117,7 +117,7 @@ Panel {
     function removeCustom() {
         var symbol = inspectedSymbol;
         if (symbol === pinnedSymbol) {
-            notice = "Fixe outro ativo na barra antes de remover este símbolo.";
+            notice = "Pin another instrument to the bar before removing this symbol.";
             return ;
         }
         if (persistSettings({
@@ -159,7 +159,7 @@ Panel {
     }
 
     function formatTime(epoch) {
-        return epoch > 0 ? new Date(epoch * 1000).toLocaleString(Qt.locale(), "dd MMM HH:mm") : "não informado";
+        return epoch > 0 ? new Date(epoch * 1000).toLocaleString(Qt.locale("en_US"), "dd MMM HH:mm") : "not provided";
     }
 
     function unit(item, q) {
@@ -222,7 +222,7 @@ Panel {
             validationTimer.stop();
             root.validatingSymbol = "";
             if (!success) {
-                root.notice = "Não foi possível validar " + symbol + ". Confira o ticker ou tente novamente; pode ser falha de rede.";
+                root.notice = "Could not validate " + symbol + ". Check the ticker or try again; the network may be unavailable.";
                 return ;
             }
             if (root.persistSettings({
@@ -230,7 +230,7 @@ Panel {
                 "favorites": State.unique(root.favorites.concat([symbol]))
             })) {
                 root.inspectedSymbol = symbol;
-                root.notice = symbol + " adicionado aos favoritos.";
+                root.notice = symbol + " added to favorites.";
                 root.filterId = "favorites";
             }
         }
@@ -241,7 +241,7 @@ Panel {
 
         interval: 20000
         onTriggered: {
-            root.notice = "Validação indisponível. Aguarde e tente novamente.";
+            root.notice = "Validation unavailable. Please wait and try again.";
             root.validatingSymbol = "";
         }
     }
@@ -339,7 +339,7 @@ Panel {
                         id: refreshButton
 
                         text: "↻"
-                        tooltipText: "Atualizar cotações · Ctrl+R"
+                        tooltipText: "Refresh quotes · Ctrl+R"
                         foreground: root.foreground
                         onClicked: root.refreshAll()
                     }
@@ -348,8 +348,8 @@ Panel {
                         id: settingsButton
 
                         objectName: "settingsButton"
-                        text: root.preferencesOpen ? "Voltar" : "⚙"
-                        tooltipText: "Preferências"
+                        text: root.preferencesOpen ? "Back" : "⚙"
+                        tooltipText: "Preferences"
                         foreground: root.foreground
                         onClicked: {
                             root.preferencesOpen = !root.preferencesOpen;
@@ -410,14 +410,14 @@ Panel {
                                 font.family: root.fontFamily
                                 font.pixelSize: Style.font.body
                                 font.bold: true
-                                Accessible.name: "Variação diária " + text
+                                Accessible.name: "Daily change " + text
                             }
 
                         }
 
                         Text {
                             Layout.fillWidth: true
-                            text: root.unit(root.inspectedInstrument, root.inspectedQuote) + " · " + root.inspectedInstrument.symbol + (root.inspectedSymbol.indexOf("=F") >= 0 ? " · futuro" : "") + " · variação diária"
+                            text: root.unit(root.inspectedInstrument, root.inspectedQuote) + " · " + root.inspectedInstrument.symbol + (root.inspectedSymbol.indexOf("=F") >= 0 ? " · futures" : "") + " · daily change"
                             color: root.dim
                             font.pixelSize: Style.font.caption
                             elide: Text.ElideRight
@@ -436,7 +436,7 @@ Panel {
 
                             ActionButton {
                                 objectName: "pinButton"
-                                text: root.inspectedSymbol === root.pinnedSymbol ? "✓ Na barra" : "Mostrar na barra"
+                                text: root.inspectedSymbol === root.pinnedSymbol ? "✓ Pinned to bar" : "Pin to bar"
                                 foreground: root.foreground
                                 enabled: root.inspectedSymbol !== root.pinnedSymbol
                                 onClicked: root.pinInspected()
@@ -445,7 +445,7 @@ Panel {
                             ActionButton {
                                 objectName: "favoriteButton"
                                 text: root.favorites.indexOf(root.inspectedSymbol) >= 0 ? "★" : "☆"
-                                tooltipText: "Alternar favorito de " + root.inspectedInstrument.label
+                                tooltipText: "Toggle favorite for " + root.inspectedInstrument.label
                                 foreground: root.foreground
                                 onClicked: root.toggleFavorite(root.inspectedSymbol)
                             }
@@ -457,7 +457,7 @@ Panel {
                             ActionButton {
                                 objectName: "detailsButton"
                                 text: "ⓘ"
-                                tooltipText: "Horários e fonte da cotação"
+                                tooltipText: "Quote timestamps and source"
                                 foreground: root.foreground
                                 onClicked: {
                                     detailPopup.open();
@@ -474,9 +474,9 @@ Panel {
 
                         objectName: "searchField"
                         Layout.fillWidth: true
-                        placeholderText: "Buscar ativo ou ticker · Ctrl+F"
+                        placeholderText: "Search instrument or ticker · Ctrl+F"
                         foreground: root.foreground
-                        Accessible.name: "Buscar ativo ou ticker"
+                        Accessible.name: "Search instrument or ticker"
                         onAccepted: root.moveToList()
                         Keys.onDownPressed: root.moveToList()
                     }
@@ -485,14 +485,14 @@ Panel {
                         Layout.fillWidth: true
 
                         ActionButton {
-                            text: "Todos"
+                            text: "All"
                             selected: root.filterId === "all"
                             foreground: root.foreground
                             onClicked: root.setFilter("all")
                         }
 
                         ActionButton {
-                            text: "★ Favoritos"
+                            text: "★ Favorites"
                             selected: root.filterId === "favorites"
                             foreground: root.foreground
                             onClicked: root.setFilter("favorites")
@@ -508,10 +508,10 @@ Panel {
                             currentIndex: model.findIndex(function(m) {
                                 return m.value === root.filterId;
                             })
-                            displayText: currentIndex < 0 ? "Mercados" : currentText
+                            displayText: currentIndex < 0 ? "Markets" : currentText
                             font.family: root.fontFamily
                             font.pixelSize: Style.font.bodySmall
-                            Accessible.name: "Filtrar por mercado"
+                            Accessible.name: "Filter by market"
                             palette.buttonText: root.foreground
                             palette.text: root.foreground
                             palette.window: root.background
@@ -544,7 +544,7 @@ Panel {
                         keyNavigationEnabled: true
                         boundsBehavior: Flickable.StopAtBounds
                         Accessible.role: Accessible.List
-                        Accessible.name: "Cotações; setas navegam, Enter consulta, espaço favorita"
+                        Accessible.name: "Quotes; arrow keys navigate, Enter inspects, Space toggles favorite"
                         Keys.onReturnPressed: {
                             if (currentItem) {
                                 root.inspect(currentItem.modelData.symbol);
@@ -574,7 +574,7 @@ Panel {
 
                             Text {
                                 width: parent.width
-                                text: root.filterId === "favorites" && searchField.text === "" ? "Seus favoritos aparecem aqui. Use ☆ para adicionar." : "Nenhum ativo encontrado."
+                                text: root.filterId === "favorites" && searchField.text === "" ? "Your favorites appear here. Use ☆ to add one." : "No instruments found."
                                 wrapMode: Text.Wrap
                                 horizontalAlignment: Text.AlignHCenter
                                 color: root.foreground
@@ -583,7 +583,7 @@ Panel {
 
                             ActionButton {
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                text: "Adicionar símbolo"
+                                text: "Add symbol"
                                 foreground: root.foreground
                                 onClicked: {
                                     root.preferencesOpen = true;
@@ -612,7 +612,7 @@ Panel {
                             border.width: watchlist.activeFocus && watchlist.currentIndex === index ? 2 : 0
                             border.color: root.foreground
                             Accessible.role: Accessible.ListItem
-                            Accessible.name: modelData.label + ", " + root.formatPrice(quote) + " " + root.unit(modelData, quote) + ", variação " + root.formatChange(quote) + ", " + root.status(quote)
+                            Accessible.name: modelData.label + ", " + root.formatPrice(quote) + " " + root.unit(modelData, quote) + ", change " + root.formatChange(quote) + ", " + root.status(quote)
                             Accessible.onPressAction: root.inspect(modelData.symbol)
 
                             MouseArea {
@@ -674,7 +674,7 @@ Panel {
 
                                     Text {
                                         Layout.fillWidth: true
-                                        text: root.unit(quoteRow.modelData, quoteRow.quote) + (quoteRow.quote && (quoteRow.quote.error || quoteService.now - quoteRow.quote.timestamp > 900) ? " · antigo" : "")
+                                        text: root.unit(quoteRow.modelData, quoteRow.quote) + (quoteRow.quote && (quoteRow.quote.error || quoteService.now - quoteRow.quote.timestamp > 900) ? " · stale" : "")
                                         horizontalAlignment: Text.AlignRight
                                         color: root.dim
                                         font.pixelSize: Style.font.caption
@@ -694,7 +694,7 @@ Panel {
 
                                 ActionButton {
                                     text: root.favorites.indexOf(quoteRow.modelData.symbol) >= 0 ? "★" : "☆"
-                                    tooltipText: "Favorito: " + quoteRow.modelData.label
+                                    tooltipText: "Favorite: " + quoteRow.modelData.label
                                     foreground: root.foreground
                                     horizontalPadding: 1
                                     focusable: false
@@ -709,7 +709,7 @@ Panel {
 
                     Text {
                         Layout.fillWidth: true
-                        text: quoteService.refreshing ? "Atualizando · resultados aparecem progressivamente" : quoteService.failureCount ? quoteService.failureCount + " consulta(s) indisponível(is) · Ctrl+R para tentar novamente" : "Yahoo Finance · dados podem ter atraso"
+                        text: quoteService.refreshing ? "Refreshing · results arrive progressively" : quoteService.failureCount ? quoteService.failureCount + " request(s) unavailable · Ctrl+R to retry" : "Yahoo Finance · data may be delayed"
                         color: root.dim
                         font.pixelSize: Style.font.caption
                         elide: Text.ElideRight
@@ -733,14 +733,14 @@ Panel {
                         spacing: Style.space(12)
 
                         Text {
-                            text: "Preferências"
+                            text: "Preferences"
                             color: root.foreground
                             font.pixelSize: Style.font.body
                             font.bold: true
                         }
 
                         Text {
-                            text: "Rótulo na barra (vazio = automático)"
+                            text: "Bar label (blank = automatic)"
                             color: root.foreground
                             font.pixelSize: Style.font.bodySmall
                         }
@@ -752,11 +752,11 @@ Panel {
                             Layout.fillWidth: true
                             maximumLength: 32
                             foreground: root.foreground
-                            Accessible.name: "Rótulo na barra"
+                            Accessible.name: "Bar label"
                         }
 
                         Text {
-                            text: "Atualização da barra · 30 a 900 segundos"
+                            text: "Bar refresh · 30 to 900 seconds"
                             color: root.foreground
                             font.pixelSize: Style.font.bodySmall
                         }
@@ -767,7 +767,7 @@ Panel {
                             objectName: "intervalField"
                             Layout.fillWidth: true
                             foreground: root.foreground
-                            Accessible.name: "Intervalo em segundos"
+                            Accessible.name: "Interval in seconds"
 
                             validator: IntValidator {
                                 bottom: 30
@@ -778,16 +778,16 @@ Panel {
 
                         ActionButton {
                             objectName: "savePreferences"
-                            text: "Salvar preferências"
+                            text: "Save preferences"
                             foreground: root.foreground
                             onClicked: {
                                 if (intervalField.acceptableInput && root.persistSettings({
                                     "barLabel": barLabelField.text.trim(),
                                     "refreshIntervalSec": Number(intervalField.text)
                                 }))
-                                    root.notice = "Preferências salvas.";
+                                    root.notice = "Preferences saved.";
                                 else
-                                    root.notice = "Confira o intervalo (30–900 segundos).";
+                                    root.notice = "Check the interval (30–900 seconds).";
                             }
                         }
 
@@ -797,7 +797,7 @@ Panel {
                         }
 
                         Text {
-                            text: "Adicionar símbolo do Yahoo Finance"
+                            text: "Add a Yahoo Finance symbol"
                             color: root.foreground
                             font.pixelSize: Style.font.bodySmall
                         }
@@ -807,15 +807,15 @@ Panel {
 
                             objectName: "customSymbolField"
                             Layout.fillWidth: true
-                            placeholderText: "Ex.: BTC-USD ou VALE"
+                            placeholderText: "E.g. BTC-USD or VALE"
                             maximumLength: 32
                             foreground: root.foreground
-                            Accessible.name: "Símbolo personalizado"
+                            Accessible.name: "Custom symbol"
                             onAccepted: root.validateCustom()
                         }
 
                         ActionButton {
-                            text: root.validatingSymbol ? "Validando…" : "Validar e adicionar"
+                            text: root.validatingSymbol ? "Validating…" : "Validate and add"
                             enabled: !root.validatingSymbol
                             foreground: root.foreground
                             onClicked: root.validateCustom()
@@ -823,7 +823,7 @@ Panel {
 
                         Text {
                             Layout.fillWidth: true
-                            text: "O símbolo só é salvo após uma cotação válida. Adicionar um favorito não altera o ativo da barra."
+                            text: "A symbol is saved only after a valid quote. Adding a favorite does not change the bar instrument."
                             wrapMode: Text.Wrap
                             color: root.foreground
                             font.pixelSize: Style.font.caption
@@ -831,7 +831,7 @@ Panel {
 
                         ActionButton {
                             visible: root.customSymbols.indexOf(root.inspectedSymbol) >= 0
-                            text: "Remover " + root.inspectedSymbol
+                            text: "Remove " + root.inspectedSymbol
                             foreground: root.foreground
                             onClicked: root.removeCustom()
                         }
@@ -877,7 +877,7 @@ Panel {
 
                     Text {
                         Layout.fillWidth: true
-                        text: State.session(root.inspectedQuote) + "\nCotação: " + root.formatTime(root.inspectedQuote ? root.inspectedQuote.timestamp : 0) + "\nConsulta: " + root.formatTime(root.inspectedQuote ? root.inspectedQuote.fetchedAt : 0) + "\nHorários no fuso local · " + (root.inspectedQuote ? root.inspectedQuote.exchangeTimezone || "bolsa sem fuso informado" : "") + "\n" + root.status(root.inspectedQuote) + "\n" + (root.inspectedQuote ? root.inspectedQuote.error || "" : "") + "\nFonte: Yahoo Finance · melhor esforço"
+                        text: State.session(root.inspectedQuote) + "\nQuote: " + root.formatTime(root.inspectedQuote ? root.inspectedQuote.timestamp : 0) + "\nRequest: " + root.formatTime(root.inspectedQuote ? root.inspectedQuote.fetchedAt : 0) + "\nTimes in local timezone · " + (root.inspectedQuote ? root.inspectedQuote.exchangeTimezone || "exchange timezone not provided" : "") + "\n" + root.status(root.inspectedQuote) + "\n" + (root.inspectedQuote ? root.inspectedQuote.error || "" : "") + "\nSource: Yahoo Finance · best effort"
                         wrapMode: Text.Wrap
                         color: root.foreground
                         font.pixelSize: Style.font.bodySmall
@@ -886,7 +886,7 @@ Panel {
                     ActionButton {
                         id: detailClose
 
-                        text: "Fechar"
+                        text: "Close"
                         foreground: root.foreground
                         onClicked: detailPopup.close()
                     }

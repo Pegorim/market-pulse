@@ -17,18 +17,18 @@ function merge(previous, snapshot) {
   return next
 }
 function status(q, now) {
-  if (!q) return "Aguardando consulta"
-  if (q.price === null || q.price === undefined) return "Indisponível · tente atualizar"
-  if (q.error) return "Falha na consulta · último valor preservado"
-  if (!q.timestamp) return "Horário da cotação não informado"
+  if (!q) return "Waiting for quote"
+  if (q.price === null || q.price === undefined) return "Unavailable · try refreshing"
+  if (q.error) return "Request failed · last value preserved"
+  if (!q.timestamp) return "Quote time not provided"
   var age = Math.max(0, now - q.timestamp)
-  if (age > 900) return "Cotação antiga · há " + (age < 3600 ? Math.floor(age / 60) + " min" : age < 86400 ? Math.floor(age / 3600) + " h" : Math.floor(age / 86400) + " dias")
-  if (Number(q.dataDelayMinutes) > 0) return "Atraso informado: " + q.dataDelayMinutes + " min"
-  return "Cotação há " + Math.floor(age / 60) + " min · pode ter atraso"
+  if (age > 900) return "Stale quote · " + (age < 3600 ? Math.floor(age / 60) + " min" : age < 86400 ? Math.floor(age / 3600) + " h" : Math.floor(age / 86400) + " d") + " ago"
+  if (Number(q.dataDelayMinutes) > 0) return "Reported delay: " + q.dataDelayMinutes + " min"
+  return "Quote " + Math.floor(age / 60) + " min ago · may be delayed"
 }
 function session(q) {
-  var states = {REGULAR: "Sessão regular", PRE: "Pré-mercado", POST: "Pós-mercado", CLOSED: "Mercado fechado", PREPRE: "Pré-mercado", POSTPOST: "Pós-mercado"}
-  return states[q && q.marketState] || "Sessão não informada"
+  var states = {REGULAR: "Regular session", PRE: "Pre-market", POST: "After-hours", CLOSED: "Market closed", PREPRE: "Pre-market", POSTPOST: "After-hours"}
+  return states[q && q.marketState] || "Session not provided"
 }
 function unique(values) {
   return (Array.isArray(values) ? values : []).filter(function(v, i, all) { return typeof v === "string" && v !== "" && all.indexOf(v) === i })

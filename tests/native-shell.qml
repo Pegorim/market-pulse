@@ -104,7 +104,7 @@ ShellRoot {
       control("customSymbolField").text="INVALID!"
       pulse.validateCustom()
       equal(harness.saved.instrumentSymbol,"GC=F")
-      check(pulse.notice.indexOf("válido")>=0)
+      check(pulse.notice.indexOf("valid ticker")>=0)
       control("customSymbolField").text="BAD"
       pulse.validateCustom()
       tryCompare(pulse,"validatingSymbol","",10000)
