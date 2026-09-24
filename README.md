@@ -2,6 +2,35 @@
 
 A native, compact monitor for indexes, stocks, futures and commodities. Version 1.2.0 puts quotes first and keeps the inspected instrument independent from the bar.
 
+## Install, update and remove
+
+Requires **Omarchy Quattro** with its Quickshell/Qt Quick shell, **Python 3.10+**, and internet access to `query2.finance.yahoo.com`. Git is used by the Omarchy plugin commands. No API key, paid subscription, pip package, Node runtime or privileged command is required to run the plugin. The interface currently uses Portuguese labels and English instrument names.
+
+```bash
+omarchy plugin add https://github.com/Pegorim/market-pulse.git --enable
+omarchy plugin update mateus.market-pulse
+```
+
+Disable without removing the checkout:
+
+```bash
+omarchy plugin disable mateus.market-pulse
+```
+
+Remove through Omarchy's standard confirmation flow:
+
+```bash
+omarchy plugin remove mateus.market-pulse
+```
+
+These commands affect this plugin only. Installation from Git follows upstream HEAD; it is not pinned to a marketplace verification snapshot. Existing manually installed copies without Git metadata cannot use the Git update command; back up their plugin directory and settings before migrating to a Git-managed install.
+
+## Preview
+
+![Market Pulse native panel with search, favorites and commodity quotes](preview.png)
+
+Native QML panel captured in an isolated test window. **All displayed prices are synthetic test fixtures, not live market data.**
+
 ## Everyday use
 
 - Click the bar widget to open. Its existing instrument, label and refresh interval are preserved.
@@ -60,3 +89,7 @@ For rollback, close the panel, move the current plugin to a temporary holding di
 ## Scope
 
 Historical charts, price alerts, positions/holdings and paid providers are intentionally outside this release. No synthetic chart or portfolio values are presented.
+
+## License
+
+MIT — see [LICENSE](LICENSE). The license covers this plugin's code and preview, not third-party market data. Market data is provided by Yahoo Finance; availability and use remain subject to the provider's terms. This plugin is not affiliated with Yahoo and is not a trading or investment-advice tool.
